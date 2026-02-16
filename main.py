@@ -7,6 +7,7 @@ import json
 from scapy.all import sniff, IP, TCP, UDP, Ether, get_if_list
 from datetime import datetime
 from pathlib import Path
+from flood import FloodDetector
 
 # Suspicious ports to monitor
 SUS_PORTS = [
@@ -40,10 +41,11 @@ BLACKLIST_MAC = [
 Path('alerts').mkdir(exist_ok=True)
 
 alert_count = 0
+flood_detector = FloodDetector()
 
 
 def handle_packet(pkt):
-    """Only alert on SUS stuff"""
+    """Analyze packet for suspicious activity: blacklist, sus ports, and flooding"""
     global alert_count
     
     # Get MAC addresses
@@ -56,6 +58,30 @@ def handle_packet(pkt):
     
     src_ip = pkt[IP].src
     dst_ip = pkt[IP].dst
+    
+    # Check for flooding attacks first
+    flood_alert = flood_detector.check_packet(pkt)
+    if flood_alert:
+        alert_count += 1
+        reason = f"{flood_alert['type']}: {flood_alert['pps']} pps (threshold: {flood_alert['threshold']} pps)"
+        msg = f"\033[91m[ALERT {alert_count}] {datetime.now().strftime('%H:%M:%S')} - {reason}\033[0m"
+        print(msg, flush=True)
+        
+        # Save to file
+        alert_data = {
+            'time': datetime.now().isoformat(),
+            'alert_type': 'FLOOD_DETECTION',
+            'reason': reason,
+            'src_ip': src_ip,
+            'dst_ip': dst_ip,
+            'src_mac': src_mac,
+            'dst_mac': dst_mac,
+            'flood_details': flood_alert
+        }
+        with open(f'alerts/alerts_{datetime.now().strftime("%Y%m%d")}.json', 'a') as f:
+            json.dump(alert_data, f)
+            f.write('\n')
+        return  # Don't check other detections if flood detected
     
     # Alert reason
     reason = None
@@ -99,6 +125,7 @@ def handle_packet(pkt):
         with open(f'alerts/alerts_{datetime.now().strftime("%Y%m%d")}.json', 'a') as f:
             json.dump({
                 'time': datetime.now().isoformat(),
+                'alert_type': 'BLACKLIST_OR_SUSPICIOUS_PORT',
                 'reason': reason,
                 'src_ip': src_ip,
                 'dst_ip': dst_ip,
@@ -121,6 +148,12 @@ print(f"Your Network Interface: {interface}")
 print(f"Suspicious Ports Are: {SUS_PORTS}")
 print(f"Blacklist IPs Are: {BLACKLIST_IPS}")
 print(f"Blacklist MACs Are: {BLACKLIST_MAC}")
+print("\n[FLOOD DETECTION ENABLED]")
+print(f"  SYN Flood Threshold: {flood_detector.SYN_THRESHOLD} pps")
+print(f"  UDP Flood Threshold: {flood_detector.UDP_THRESHOLD} pps")
+print(f"  ICMP Flood Threshold: {flood_detector.ICMP_THRESHOLD} pps")
+print(f"  DNS Flood Threshold: {flood_detector.DNS_THRESHOLD} pps")
+print(f"  ACK Flood Threshold: {flood_detector.ACK_THRESHOLD} pps")
 print("="*60 + "\n")
 
 try:
