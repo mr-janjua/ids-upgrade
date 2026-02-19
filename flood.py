@@ -10,6 +10,7 @@ Detects various flooding attacks:
 - ACK Floods
 
 TODO: add HTTP flood detection later
+HTTP Flood Detection Postpone, requre deep inspection of security protocols and state tracking.
 """
 
 from collections import defaultdict, deque
