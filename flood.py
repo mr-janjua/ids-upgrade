@@ -8,6 +8,7 @@ Detects various flooding attacks:
 - ICMP Floods (ping floods)
 - DNS Floods
 - ACK Floods
+- HTTP floods (TODO)
 
 TODO: add HTTP flood detection later
 HTTP Flood Detection Postpone, requre deep inspection of security protocols and state tracking.
