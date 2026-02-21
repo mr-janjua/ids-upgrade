@@ -154,6 +154,7 @@ print(f"  UDP Flood Threshold: {flood_detector.UDP_THRESHOLD} pps")
 print(f"  ICMP Flood Threshold: {flood_detector.ICMP_THRESHOLD} pps")
 print(f"  DNS Flood Threshold: {flood_detector.DNS_THRESHOLD} pps")
 print(f"  ACK Flood Threshold: {flood_detector.ACK_THRESHOLD} pps")
+print(f"  HTTP Flood Threshold: {flood_detector.HTTP_THRESHOLD} pps")
 print("="*60 + "\n")
 
 try:

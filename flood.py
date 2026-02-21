@@ -8,16 +8,17 @@ Detects various flooding attacks:
 - ICMP Floods (ping floods)
 - DNS Floods
 - ACK Floods
-- HTTP floods (TODO)
+- HTTP Floods
 
-TODO: add HTTP flood detection later
-HTTP Flood Detection Postpone, requre deep inspection of security protocols and state tracking.
+nnkj9087
+HTTP flood detection is now implemented; it looks for HTTP requests on port 80/443 or via the HTTPRequest layer and tracks request rate.
 """
 
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from typing import Dict, Tuple, List, Optional
-from scapy.all import IP, TCP, UDP, ICMP
+from scapy.all import IP, TCP, UDP, ICMP, Raw
+from scapy.layers.http import HTTPRequest
 import json
 
 
@@ -29,6 +30,7 @@ class FloodDetector:
     ICMP_THRESHOLD = 200 
     DNS_THRESHOLD = 300  
     ACK_THRESHOLD = 150  
+    HTTP_THRESHOLD = 300  # new threshold for HTTP request rate
     
     TIME_WINDOW = 5  # seconds
     MIN_PACKETS = 50  # avoid false positives
@@ -45,6 +47,7 @@ class FloodDetector:
                 'icmp_timestamps': deque(maxlen=10000), # and here
                 'dns_timestamps': deque(maxlen=10000),
                 'ack_timestamps': deque(maxlen=10000),
+                'http_timestamps': deque(maxlen=10000),
                 'last_alert': {}  
             }
         )
@@ -255,6 +258,50 @@ class FloodDetector:
                 return alert
         
         return None
+
+    def detect_http_flood(self, pkt, src_ip: str, dst_ip: str) -> Optional[Dict]:
+        """HTTP flood detection - large number of HTTP requests"""
+        # look for HTTPRequest layer or TCP traffic on typical HTTP ports
+        if pkt.haslayer(HTTPRequest):
+            pass
+        elif pkt.haslayer(TCP):
+            dport = pkt[TCP].dport
+            if dport not in (80, 443):
+                return None
+            # check payload for HTTP methods
+            if not pkt.haslayer(Raw):
+                return None
+            payload = pkt[Raw].load
+            if not (payload.startswith(b'GET') or payload.startswith(b'POST') or payload.startswith(b'HEAD')):
+                return None
+        else:
+            return None
+
+        # record the event
+        self.src_stats[src_ip]['http_timestamps'].append(datetime.now())
+        self._prune_old_timestamps(self.src_stats[src_ip]['http_timestamps'])
+        
+        pps = self._calculate_pps(self.src_stats[src_ip]['http_timestamps'])
+        pkt_count = len(self.src_stats[src_ip]['http_timestamps'])
+        
+        if pps > self.HTTP_THRESHOLD and pkt_count > self.MIN_PACKETS:
+            if self._should_alert(src_ip, 'http_flood'):
+                self.src_stats[src_ip]['last_alert']['http_flood'] = datetime.now()
+                alert = {
+                    'type': 'HTTP_FLOOD',
+                    'severity': 'HIGH',
+                    'src_ip': src_ip,
+                    'dst_ip': dst_ip,
+                    'pps': round(pps, 2),
+                    'packet_count': pkt_count,
+                    'threshold': self.HTTP_THRESHOLD,
+                    'dport': pkt[TCP].dport if pkt.haslayer(TCP) else None,
+                    'timestamp': datetime.now().isoformat()
+                }
+                self.flood_alerts.append(alert)
+                return alert
+        
+        return None
     
     def check_packet(self, pkt) -> Optional[Dict]:
         """main packet analysis - checks all flood types"""
@@ -270,7 +317,8 @@ class FloodDetector:
             self.detect_udp_flood(pkt, src_ip, dst_ip) or
             self.detect_icmp_flood(pkt, src_ip, dst_ip) or
             self.detect_dns_flood(pkt, src_ip, dst_ip) or
-            self.detect_ack_flood(pkt, src_ip, dst_ip)
+            self.detect_ack_flood(pkt, src_ip, dst_ip) or
+            self.detect_http_flood(pkt, src_ip, dst_ip)
         )
         
         return alert
@@ -289,6 +337,8 @@ class FloodDetector:
             'dns_pps': round(self._calculate_pps(stats['dns_timestamps']), 2),
             'ack_packets': len(stats['ack_timestamps']),
             'ack_pps': round(self._calculate_pps(stats['ack_timestamps']), 2),
+            'http_packets': len(stats['http_timestamps']),
+            'http_pps': round(self._calculate_pps(stats['http_timestamps']), 2),
         }
     
     def reset_stats(self, src_ip: Optional[str] = None) -> None:

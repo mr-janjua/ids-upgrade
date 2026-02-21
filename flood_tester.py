@@ -114,6 +114,30 @@ def test_dns_flood():
     
     return result is not None
 
+def test_http_flood():
+    """Test HTTP flood detection"""
+    print("\n[*] Testing HTTP flood detection...")
+    detector = FloodDetector()
+    
+    src_ip = "192.168.1.107"
+    dst_ip = "10.0.0.8"
+    
+    print("  - Sending 400 HTTP GET requests rapidly...")
+    result = None
+    payload = b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    for i in range(400):
+        pkt = IP(src=src_ip, dst=dst_ip)/TCP(dport=80, flags='PA')/Raw(load=payload)
+        result = detector.check_packet(pkt)
+        if result:
+            print(f"  [✓] HTTP flood detected!")
+            print(f"      PPS: {result['pps']}, Threshold: {result['threshold']}")
+            break
+    
+    if not result:
+        print("  [X] FAILED - flood not detected")
+    
+    return result is not None
+
 def test_ack_flood():
     """Test ACK flood detection"""
     print("\n[*] Testing ACK flood detection...")
@@ -243,6 +267,7 @@ def run_all_tests():
     results['UDP Flood'] = test_udp_flood()
     results['ICMP Flood'] = test_icmp_flood()
     results['DNS Flood'] = test_dns_flood()
+    results['HTTP Flood'] = test_http_flood()
     results['ACK Flood'] = test_ack_flood()
     results['Alert Cooldown'] = test_alert_cooldown()
     results['Statistics'] = test_stats()
