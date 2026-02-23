@@ -25,10 +25,10 @@ import json
 class FloodDetector:
     
     # thresholds - tweak these based on your network
-    SYN_THRESHOLD = 100  
+    SYN_THRESHOLD = 150  # packets per second for SYN flood  
     UDP_THRESHOLD = 500  
     ICMP_THRESHOLD = 200 
-    DNS_THRESHOLD = 300  
+    DNS_THRESHOLD = 350  
     ACK_THRESHOLD = 150  
     HTTP_THRESHOLD = 300  # new threshold for HTTP request rate
     
